@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘 뭐 먹지?</title>
+<style>
+  :root {
+    --bg: #fff8f0; --card: #ffffff; --text: #2b2118; --muted: #8a7b6d;
+    --accent: #ff6b35; --accent-soft: #ffe3d6; --border: #f0e2d4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1712; --card: #2a221b; --text: #f5ece3; --muted: #b3a393;
+      --accent: #ff8a5c; --accent-soft: #4a2f22; --border: #3d3229;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  main { max-width: 520px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { text-align: center; margin: 0 0 4px; font-size: 28px; }
+  .sub { text-align: center; color: var(--muted); margin: 0 0 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; margin-bottom: 16px;
+  }
+  .label { font-weight: 700; margin-bottom: 10px; font-size: 15px; }
+  .label + .chips + .label { margin-top: 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--border); background: transparent; color: var(--text);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 14px;
+  }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .result { padding: 0; overflow: hidden; }
+  .photo {
+    position: relative; aspect-ratio: 4 / 3; background: var(--accent-soft);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .photo .emoji { font-size: 80px; }
+  .photo::after {
+    content: ""; position: absolute; inset: auto 0 0 0; height: 45%;
+    background: linear-gradient(transparent, rgba(0,0,0,.65)); pointer-events: none;
+  }
+  .caption { position: absolute; left: 20px; right: 20px; bottom: 16px; z-index: 1; color: #fff; }
+  .name { font-size: 32px; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  .meta { margin-top: 4px; font-size: 15px; opacity: .9; }
+  .placeholder .caption { color: var(--text); }
+  .placeholder .name { text-shadow: none; }
+  .placeholder.photo::after { display: none; }
+  .spinning img { filter: blur(2px); }
+
+  .btn {
+    width: 100%; border: 0; border-radius: 12px; padding: 16px;
+    background: var(--accent); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer;
+  }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn2 {
+    flex: 1; border: 1px solid var(--border); background: var(--card); color: var(--text);
+    border-radius: 12px; padding: 12px; font-size: 15px; cursor: pointer;
+  }
+  .opt { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 14px; color: var(--muted); }
+  .add { display: flex; flex-wrap: wrap; gap: 8px; }
+  .add input, .add select {
+    flex: 1 1 120px; min-width: 0; padding: 10px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  .add select { flex: 0 0 96px; }
+  .add input[type=number] { flex: 0 0 110px; }
+  .add button { flex: 0 0 auto; padding: 10px 16px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+  .history { list-style: none; padding: 0; margin: 0; }
+  .history li { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 14px; }
+  .history li:last-child { border-bottom: 0; }
+  .history .t { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🍽️ 오늘 뭐 먹지?</h1>
+  <p class="sub">고민은 그만, 버튼 한 번이면 끝!</p>
+
+  <div class="card">
+    <div class="label">어떤 종류가 당기세요?</div>
+    <div class="chips" id="cats"></div>
+    <div class="label">예산은 얼마인가요? (1인 기준)</div>
+    <div class="chips" id="prices"></div>
+    <label class="opt"><input type="checkbox" id="noRecent" checked> 최근 먹은 메뉴 3개 제외</label>
+  </div>
+
+  <div class="card result">
+    <div class="photo placeholder" id="photo">
+      <span class="emoji" id="emoji">🤔</span>
+      <div class="caption">
+        <div class="name" id="name">무엇을 먹을까요?</div>
+        <div class="meta" id="meta"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn" id="pick">메뉴 뽑기 🎲</button>
+  <div class="row">
+    <button class="btn2" id="eat">이걸로 먹을래요 ✅</button>
+    <button class="btn2" id="map">근처 식당 찾기 📍</button>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="label">메뉴 직접 추가</div>
+    <div class="add">
+      <select id="newCat"></select>
+      <input id="newName" placeholder="예: 마라샹궈">
+      <input id="newPrice" type="number" placeholder="가격(원)" step="1000" min="0">
+      <button id="addBtn">추가</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">최근 먹은 메뉴</div>
+    <ul class="history" id="history"></ul>
+  </div>
+
+  <footer>음식 사진: Wikimedia Commons · 가격은 대략적인 평균이에요</footer>
+</main>
+
+<script>
+const CATS = { "한식": "🍚", "중식": "🥟", "일식": "🍣", "양식": "🍝", "분식": "🍢", "패스트푸드": "🍔" };
+
+const PRICES = [
+  { label: "전체", min: 0, max: Infinity },
+  { label: "💸 1만원 이하", min: 0, max: 10000 },
+  { label: "💰 1~2만원", min: 10001, max: 20000 },
+  { label: "💎 2만원 이상", min: 20001, max: Infinity },
+];
+
+// [이름, 종류, 가격, 사진]
+const DEFAULT_MENUS = [
+  ["김치찌개", "한식", 9000, "00"], ["된장찌개", "한식", 9000, "01"], ["비빔밥", "한식", 10000, "02"],
+  ["제육볶음", "한식", 10000, "03"], ["삼겹살", "한식", 18000, "04"], ["불고기", "한식", 15000, "05"],
+  ["순대국", "한식", 10000, "06"], ["냉면", "한식", 12000, "07"], ["갈비탕", "한식", 15000, "08"],
+  ["닭갈비", "한식", 14000, "09"],
+  ["짜장면", "중식", 7000, "10"], ["짬뽕", "중식", 9000, "11"], ["탕수육", "중식", 20000, "12"],
+  ["마라탕", "중식", 12000, "13"], ["볶음밥", "중식", 8000, "14"], ["마파두부", "중식", 10000, "15"],
+  ["초밥", "일식", 18000, "16"], ["라멘", "일식", 11000, "17"], ["돈카츠", "일식", 11000, "18"],
+  ["우동", "일식", 8000, "19"], ["규동", "일식", 9000, "20"], ["오코노미야키", "일식", 15000, "21"],
+  ["파스타", "양식", 16000, "22"], ["피자", "양식", 25000, "23"], ["스테이크", "양식", 35000, "24"],
+  ["리조또", "양식", 17000, "25"], ["샐러드", "양식", 12000, "26"],
+  ["떡볶이", "분식", 5000, "27"], ["김밥", "분식", 4000, "28"], ["라면", "분식", 5000, "29"],
+  ["순대", "분식", 5000, "30"], ["쫄면", "분식", 7000, "31"], ["튀김", "분식", 4000, "32"],
+  ["햄버거", "패스트푸드", 8000, "33"], ["치킨", "패스트푸드", 22000, "34"], ["샌드위치", "패스트푸드", 7000, "35"],
+  ["핫도그", "패스트푸드", 4000, "36"], ["타코", "패스트푸드", 10000, "37"],
+].map(([name, cat, price, img]) => ({ name, cat, price, img: `img/${img}.jpg` }));
+
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+let custom = load("customMenus", []);
+let history = load("history", []);
+let selectedCat = "전체";
+let selectedPrice = PRICES[0];
+let current = null;
+
+const $ = id => document.getElementById(id);
+const won = n => n.toLocaleString("ko-KR") + "원";
+const allMenus = () => [...DEFAULT_MENUS, ...custom];
+
+// 뽑기 중 사진이 빨리 바뀌도록 미리 불러오기
+DEFAULT_MENUS.forEach(m => { new Image().src = m.img; });
+
+function chipRow(el, items, isOn, onPick) {
+  el.innerHTML = "";
+  for (const it of items) {
+    const b = document.createElement("button");
+    b.className = "chip" + (isOn(it) ? " on" : "");
+    b.textContent = typeof it === "string" ? `${CATS[it] || "🎲"} ${it}` : it.label;
+    b.onclick = () => { onPick(it); renderFilters(); };
+    el.appendChild(b);
+  }
+}
+
+function renderFilters() {
+  chipRow($("cats"), ["전체", ...Object.keys(CATS)], c => c === selectedCat, c => selectedCat = c);
+  chipRow($("prices"), PRICES, p => p === selectedPrice, p => selectedPrice = p);
+}
+
+function renderHistory() {
+  const ul = $("history");
+  if (!history.length) { ul.innerHTML = `<li class="empty">아직 기록이 없어요</li>`; return; }
+  ul.innerHTML = history.slice(0, 7).map(h =>
+    `<li><span>${CATS[h.cat]} ${h.name}</span><span class="t">${h.date}</span></li>`).join("");
+}
+
+function candidates() {
+  const recent = $("noRecent").checked ? history.slice(0, 3).map(h => h.name) : [];
+  return allMenus().filter(m =>
+    (selectedCat === "전체" || m.cat === selectedCat) &&
+    m.price >= selectedPrice.min && m.price <= selectedPrice.max &&
+    !recent.includes(m.name));
+}
+
+function show(item) {
+  const photo = $("photo");
+  photo.classList.remove("placeholder");
+  photo.querySelector("img")?.remove();
+  $("emoji").textContent = CATS[item.cat];
+  if (item.img) {
+    const img = document.createElement("img");
+    img.src = item.img;
+    img.alt = item.name;
+    img.onerror = () => img.remove();
+    photo.prepend(img);
+  }
+  $("name").textContent = item.name;
+  $("meta").textContent = `${CATS[item.cat]} ${item.cat} · 약 ${won(item.price)}`;
+}
+
+$("pick").onclick = () => {
+  const list = candidates();
+  if (!list.length) { alert("조건에 맞는 메뉴가 없어요! 종류나 가격대를 바꿔보세요."); return; }
+  $("pick").disabled = true;
+  $("photo").classList.add("spinning");
+  let n = 0;
+  const timer = setInterval(() => {
+    show(list[Math.floor(Math.random() * list.length)]);
+    if (++n > 15) {
+      clearInterval(timer);
+      current = list[Math.floor(Math.random() * list.length)];
+      show(current);
+      $("photo").classList.remove("spinning");
+      $("pick").disabled = false;
+      $("pick").textContent = "다시 뽑기 🎲";
+    }
+  }, 80);
+};
+
+$("eat").onclick = () => {
+  if (!current) { alert("먼저 메뉴를 뽑아주세요!"); return; }
+  const d = new Date();
+  history.unshift({ name: current.name, cat: current.cat, date: `${d.getMonth() + 1}/${d.getDate()}` });
+  history = history.slice(0, 20);
+  save("history", history);
+  renderHistory();
+  alert(`맛있게 드세요! ${CATS[current.cat]} ${current.name}`);
+};
+
+$("map").onclick = () => {
+  if (!current) { alert("먼저 메뉴를 뽑아주세요!"); return; }
+  window.open("https://map.kakao.com/?q=" + encodeURIComponent(current.name + " 맛집"), "_blank");
+};
+
+$("addBtn").onclick = () => {
+  const name = $("newName").value.trim();
+  const cat = $("newCat").value;
+  const price = Number($("newPrice").value);
+  if (!name) { alert("메뉴 이름을 입력해주세요!"); return; }
+  if (!price) { alert("가격을 입력해주세요!"); return; }
+  if (allMenus().some(m => m.name === name)) { alert("이미 있는 메뉴예요!"); return; }
+  custom.push({ name, cat, price });
+  save("customMenus", custom);
+  $("newName").value = "";
+  $("newPrice").value = "";
+  alert(`'${name}'(${won(price)})이(가) ${cat}에 추가됐어요!`);
+};
+
+$("newCat").innerHTML = Object.keys(CATS).map(c => `<option>${c}</option>`).join("");
+renderFilters();
+renderHistory();
+</script>
+</body>
+</html>
